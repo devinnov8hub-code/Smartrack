@@ -199,7 +199,7 @@ export default function CreateOrder() {
 
   return (
     <div className="min-h-screen">
-      <Navbar role="admin" />
+      <Navbar />
       <main className="mx-auto flex w-[624px] max-w-full flex-col gap-[34px] px-4 pt-[34px] pb-16 sm:px-0">
         <header className="flex flex-col gap-3">
           <h1 className="font-display text-2xl font-semibold text-brand">Delivery details</h1>

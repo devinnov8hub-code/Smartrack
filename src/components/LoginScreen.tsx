@@ -6,7 +6,6 @@ import eye from '../assets/icons/eye.svg'
 import logo from '../assets/icons/logo.svg'
 import { useUserContext } from '../lib/context'
 import { api } from '../services/api'
-import type { Role } from '../types'
 import { Button } from './ui/Button'
 import { TextField } from './ui/Field'
 
@@ -58,7 +57,7 @@ function LoginIllustration() {
   )
 }
 
-export function LoginScreen({ role }: { role: Role }) {
+export function LoginScreen() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -72,10 +71,11 @@ export function LoginScreen({ role }: { role: Role }) {
     setSubmitting(true)
     setError('')
     try {
-      const user = await api.login(role, email, password)
+      const user = await api.login(email, password)
       setUser(user)
       setRole(user.role)
-      navigate(`/${role}`)
+      // Admins land on /admin and riders on /rider
+      navigate(`/${user.role}`)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Something went wrong. Please try again.')
       setSubmitting(false)
@@ -112,7 +112,7 @@ export function LoginScreen({ role }: { role: Role }) {
               type="email"
               autoComplete="email"
               required
-              placeholder={role === 'admin' ? 'Email@user.com' : 'Email@rider.com'}
+              placeholder="Email@user.com"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               leading={<img src={envelope} alt="" />}
@@ -147,14 +147,12 @@ export function LoginScreen({ role }: { role: Role }) {
             LOGIN
           </Button>
           {/* Riders can't sign themselves up; their admin creates the account. */}
-          {role === 'admin' && (
-            <span className="text-center text-muted">
-              Don't have an account?{' '}
-              <Link to="/admin/register" className="text-brand underline">
-                Register
-              </Link>
-            </span>
-          )}
+          <span className="text-center text-muted">
+            Managing deliveries?{' '}
+            <Link to="/register" className="text-brand underline">
+              Create an admin account
+            </Link>
+          </span>
         </form>
       </section>
     </main>

@@ -5,10 +5,10 @@ import search from '../assets/icons/search.svg'
 import signOut from '../assets/icons/sign-out.svg'
 import { useUserContext } from '../lib/context'
 import { api } from '../services/api'
-import type { Role, User } from '../types'
+import type { User } from '../types'
 import { Button } from './ui/Button'
 
-export function SignOutButton({ role }: { role: Role }) {
+export function SignOutButton() {
   const navigate = useNavigate()
   const { setUser, setRole } = useUserContext()
 
@@ -16,7 +16,7 @@ export function SignOutButton({ role }: { role: Role }) {
     api.logout()
     setUser(null)
     setRole(null)
-    navigate(`/${role}/login`)
+    navigate('/login')
   }
 
   return (
@@ -28,11 +28,11 @@ export function SignOutButton({ role }: { role: Role }) {
 }
 
 /** Logo + sign out bar used on the form-style pages. */
-export function Navbar({ role }: { role: Role }) {
+export function Navbar() {
   return (
     <header className="flex items-center justify-between border-b-[0.4px] border-line bg-white px-6 py-2.5 lg:px-[61px]">
       <img src={logo} alt="GoShip" />
-      <SignOutButton role={role} />
+      <SignOutButton />
     </header>
   )
 }
@@ -73,7 +73,7 @@ export function TopBar({ user, searchPlaceholder, search: query, onSearch, showS
           className="size-[63px] shrink-0 rounded-full object-cover"
         />
       )}
-      {showSignOut && user && <SignOutButton role={user.role} />}
+      {showSignOut && user && <SignOutButton />}
     </div>
   )
 }

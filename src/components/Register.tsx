@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import brandMark from '../assets/icons/brand-mark.svg'
 import envelope from '../assets/icons/envelope.svg'
 import user from "../assets/icons/user.png"
@@ -7,7 +7,6 @@ import eye from '../assets/icons/eye.svg'
 import logo from '../assets/icons/logo.svg'
 import { useUserContext } from '../lib/context'
 import { api } from '../services/api'
-import type { Role } from '../types'
 import { Button } from './ui/Button'
 import { TextField } from './ui/Field'
 
@@ -59,7 +58,8 @@ function LoginIllustration() {
   )
 }
 
-export function Register({ role }: { role: Role }) {
+/** Sign up for admins. Riders don't register: their admin creates their account. */
+export function Register() {
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -74,10 +74,10 @@ export function Register({ role }: { role: Role }) {
     setSubmitting(true)
     setError('')
     try {
-      const created = await api.register(role, name, email, password)
+      const created = await api.register(name, email, password)
       setUser(created)
       setRole(created.role)
-      navigate(`/${role}`)
+      navigate(`/${created.role}`)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Something went wrong. Please try again.')
       setSubmitting(false)
@@ -125,7 +125,7 @@ export function Register({ role }: { role: Role }) {
               type="email"
               autoComplete="email"
               required
-              placeholder={role === 'admin' ? 'email@user.com' : 'email@rider.com'}
+              placeholder="email@user.com"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               leading={<img src={envelope} alt="" />}
@@ -160,6 +160,12 @@ export function Register({ role }: { role: Role }) {
           <Button type="submit" size="lg" disabled={submitting} className="w-full">
             CREATE ACCOUNT
           </Button>
+          <span className="text-center text-muted">
+            Already have an account?{' '}
+            <Link to="/login" className="text-brand underline">
+              Log in
+            </Link>
+          </span>
         </form>
       </section>
     </main>

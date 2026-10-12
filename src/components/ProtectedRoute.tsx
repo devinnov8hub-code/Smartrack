@@ -9,7 +9,7 @@ export function ProtectedRoute({ role, children }: { role: Role; children: React
 
     if (loading) return null;
     if (!user) {
-        return <Navigate to={`/${role}/login`} replace />;
+        return <Navigate to="/login" replace />;
     }
     // An admin opening a rider page (or the reverse) is sent to their own home.
     if (user.role !== role) {

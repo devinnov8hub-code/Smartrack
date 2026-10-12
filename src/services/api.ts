@@ -18,7 +18,6 @@ import type {
   PlaceInput,
   Position,
   Rider,
-  Role,
   RouteState,
   StartTripResult,
   Stats,
@@ -215,8 +214,7 @@ const tripPath = (idOrTrackingNumber: string) => `/trips/${encodeURIComponent(id
 export const api = {
   // ---- Auth ----
   /** Public sign up only creates admins; rider accounts are created by their admin. */
-  async register(role: Role, name: string, email: string, password: string): Promise<User> {
-    if (role === 'rider') throw new ApiError('Rider accounts are created by an admin.', 403)
+  async register(name: string, email: string, password: string): Promise<User> {
     const { user, token } = await request<AuthPayload>('/auth/register', {
       method: 'POST',
       body: { name, email, password },
@@ -225,22 +223,14 @@ export const api = {
     return toUser(user)
   },
 
-  async login(role: Role, email: string, password: string): Promise<User> {
+  /** One login for everyone: the account's role decides which screens they get. */
+  async login(email: string, password: string): Promise<User> {
     const { user, token } = await request<AuthPayload>('/auth/login', {
       method: 'POST',
       body: { email, password },
     })
-    const signedIn = toUser(user)
-    if (signedIn.role !== role) {
-      throw new ApiError(
-        role === 'admin'
-          ? 'This is a rider account. Use the rider login.'
-          : 'This is an admin account. Use the admin login.',
-        403,
-      )
-    }
     tokenStore.set(token)
-    return signedIn
+    return toUser(user)
   },
 
   /** Restores the signed-in user from the stored token. */
