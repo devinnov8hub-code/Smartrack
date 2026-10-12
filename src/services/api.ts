@@ -26,6 +26,7 @@ import type {
   User,
 } from '../types'
 import { ApiError, request, tokenStore } from './client'
+import { pushToken } from './pushToken'
 import { disconnectSocket, type BackendAlert } from './socket'
 
 // ---- Backend shapes ----
@@ -239,8 +240,19 @@ export const api = {
   },
 
   logout() {
+    // Stop pushes to this browser. Sent before the session token is cleared; not waited for.
+    const token = pushToken.get()
+    if (token) {
+      request('/auth/fcm-token', { method: 'DELETE', body: { token } }).catch(() => {})
+      pushToken.clear()
+    }
     tokenStore.clear()
     disconnectSocket()
+  },
+
+  /** Registers this browser to receive the signed-in user's alerts as push notifications. */
+  async registerPushToken(token: string): Promise<void> {
+    await request('/auth/fcm-token', { method: 'POST', body: { token } })
   },
 
   // ---- Deliveries (admins see the ones they created, riders the ones assigned to them) ----

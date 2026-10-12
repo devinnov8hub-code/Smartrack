@@ -1,5 +1,6 @@
 import { useReducer, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import bell from '../../assets/icons/bell.svg'
 import bolt from '../../assets/icons/bolt.svg'
 import calendar from '../../assets/icons/calendar.svg'
 import mapPinArea from '../../assets/icons/map-pin-area-sm.svg'
@@ -18,6 +19,7 @@ import { Button } from '../../components/ui/Button'
 import { Tabs } from '../../components/ui/Tabs'
 import { useAsync } from '../../hooks/useAsync'
 import { useLiveDelivery } from '../../hooks/useLiveDelivery'
+import { usePushNotifications } from '../../hooks/usePushNotifications'
 import { useServerEvent } from '../../hooks/useServerEvent'
 import { mapPropsOf } from '../../lib/deliveryMap'
 import { useUserContext } from '../../lib/context'
@@ -61,6 +63,7 @@ export default function AdminHome() {
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Delivery | null>(null)
+  const push = usePushNotifications()
   // The table row has no route; the preview loads the full delivery and follows it live
   const preview = useLiveDelivery(selected?.trackingNumber)
   const shown = preview.delivery ?? selected
@@ -85,6 +88,19 @@ export default function AdminHome() {
             onSearch={setSearch}
             showSignOut={!selected}
           />
+          {/* Not in the Figma: browsers only allow the permission prompt after a click */}
+          {push.state === 'prompt' && (
+            <div className="flex flex-wrap items-center gap-3 rounded-card border-[0.4px] border-line bg-white px-5 py-3">
+              <img src={bell} alt="" className="size-6" />
+              <p className="min-w-0 flex-1">
+                Get route, signal and delivery alerts even when this tab is closed.
+                {push.error && <span className="block text-sm text-danger">{push.error}</span>}
+              </p>
+              <Button variant="navy" size="sm" onClick={push.enable}>
+                Turn on notifications
+              </Button>
+            </div>
+          )}
           <div className="flex flex-col gap-[31px]">
             <WelcomeBanner
               role="admin"

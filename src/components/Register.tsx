@@ -1,10 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import brandMark from '../assets/icons/brand-mark.svg'
+import smartrackLogo from "../assets/icons/smartrack_logo.png"
 import envelope from '../assets/icons/envelope.svg'
 import user from "../assets/icons/user.png"
 import eye from '../assets/icons/eye.svg'
-import logo from '../assets/icons/logo.svg'
 import { useUserContext } from '../lib/context'
 import { api } from '../services/api'
 import { Button } from './ui/Button'
@@ -90,8 +89,7 @@ export function Register() {
         <LoginIllustration />
         <div className="flex max-w-[563px] flex-col gap-8">
           <div className="flex items-center gap-3">
-            <img src={brandMark} alt="" />
-            <p className="font-display text-[42px] font-semibold whitespace-nowrap text-brand">Smartrack</p>
+            <img src={smartrackLogo} alt="Smartrack" />
           </div>
           <p className="text-lg">
             Track every delivery with confidence from pickup to destination. Get real-time rider updates, route
@@ -102,11 +100,11 @@ export function Register() {
 
       <section className="flex flex-col justify-center gap-8 bg-surface/85 px-6 py-10 backdrop-blur-[4px] sm:px-[54px]">
         <div className="flex flex-col items-start gap-2.5">
-          <img src={logo} alt="Smartrack" />
+           <img src={smartrackLogo} alt="Smartrack" className='h-4' />
           <h1 className="font-display text-[42px] font-semibold text-brand">Welcome!</h1>
           <p className="text-lg">Create an account.</p>
         </div>
-        <form onSubmit={onSubmit} className="flex w-full max-w-[617px] flex-col gap-[163px]">
+        <form onSubmit={onSubmit} className="flex w-full max-w-[617px] flex-col gap-10">
           <div className="flex flex-col gap-[30px]">
            <TextField
               large
