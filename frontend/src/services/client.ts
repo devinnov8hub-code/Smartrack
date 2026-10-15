@@ -1,6 +1,6 @@
 // HTTP client for the backend. The base URL comes from VITE_API_URL in .env;
 // every backend route lives under /api.
-export const API_URL: string = import.meta.env.VITE_API_URL
+export const API_URL: string = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '')
 const TOKEN_KEY = 'smartrack.token'
 
 export class ApiError extends Error {
