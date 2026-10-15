@@ -46,7 +46,8 @@ export interface TripPackage {
 
 // Planned route the driver is expected to follow
 export interface TripRoute {
-  source?: "mapbox" | "straight_line";
+  // "mapbox" remains for trips planned before the switch to Google Maps
+  source?: "google" | "mapbox" | "straight_line";
   geometry?: { type: "LineString"; coordinates: Position[] };
   distanceMeters?: number;
   durationSeconds?: number;
@@ -130,7 +131,7 @@ const tripSchema = new Schema<ITrip>(
     destination: { type: placeSchema, required: true },
     status: { type: String, enum: TRIP_STATUSES, default: "pending" },
     route: {
-      source: { type: String, enum: ["mapbox", "straight_line"] },
+      source: { type: String, enum: ["google", "mapbox", "straight_line"] },
       geometry: {
         type: { type: String, enum: ["LineString"] },
         coordinates: { type: [[Number]], default: undefined },

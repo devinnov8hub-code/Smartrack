@@ -33,7 +33,7 @@ export const env = {
   redisUrl: process.env.REDIS_URL,
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
-  mapboxToken: process.env.MAPBOX_ACCESS_TOKEN,
+  googleMapsKey: process.env.GOOGLE_MAPS_API_KEY,
   // ISO country code that typed addresses are looked up in
   geocodeCountry: process.env.GEOCODE_COUNTRY || "ng",
   firebaseServiceAccount: process.env.FIREBASE_SERVICE_ACCOUNT,

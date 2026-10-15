@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import mapPinArea from '../assets/icons/map-pin-area.svg'
-import { searchPlaces } from '../services/places'
+import { resolvePlace, searchPlaces, type PlaceSuggestion } from '../services/places'
 import type { PlaceInput } from '../types'
 import { PinPicker } from './MapView'
 import { TextField } from './ui/Field'
@@ -22,7 +22,7 @@ interface PlaceFieldProps {
  */
 export function PlaceField({ label, placeholder, value, onChange, allowCurrentLocation }: PlaceFieldProps) {
   const [text, setText] = useState(value?.name ?? '')
-  const [found, setSuggestions] = useState<PlaceInput[]>([])
+  const [found, setSuggestions] = useState<PlaceSuggestion[]>([])
   // Only search for what the user typed, not for text we filled in ourselves
   const [searching, setSearching] = useState(false)
 
@@ -55,6 +55,14 @@ export function PlaceField({ label, placeholder, value, onChange, allowCurrentLo
     setText(place.name)
     setSearching(false)
     onChange(place)
+  }
+
+  function pick(suggestion: PlaceSuggestion) {
+    setText(suggestion.name)
+    setSearching(false)
+    resolvePlace(suggestion)
+      .then(onChange)
+      .catch(() => {})
   }
 
   function fillCurrentLocation() {
@@ -95,13 +103,13 @@ export function PlaceField({ label, placeholder, value, onChange, allowCurrentLo
             className="absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-field border-[0.4px] border-line bg-white shadow-lg"
           >
             {suggestions.map((place) => (
-              <li key={`${place.name}-${place.position.join()}`} role="option" aria-selected={false}>
+              <li key={place.id} role="option" aria-selected={false}>
                 <button
                   type="button"
                   // mousedown fires before the input's blur closes the list
                   onMouseDown={(event) => {
                     event.preventDefault()
-                    choose(place)
+                    pick(place)
                   }}
                   className="block w-full px-2.5 py-2 text-left text-sm hover:bg-field"
                 >

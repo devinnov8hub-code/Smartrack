@@ -21,7 +21,7 @@ services:
         sync: false
       - key: CORS_ORIGIN
         sync: false
-      - key: MAPBOX_ACCESS_TOKEN
+      - key: GOOGLE_MAPS_API_KEY
         sync: false
       - key: FIREBASE_SERVICE_ACCOUNT
         sync: false

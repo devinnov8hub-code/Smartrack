@@ -1,6 +1,6 @@
 import type { Types } from "mongoose";
 import { env } from "../config/env";
-import * as mapbox from "../config/mapbox";
+import * as maps from "../config/maps";
 import * as store from "../config/redis";
 import { LocationPing } from "../models/LocationPing";
 import { TRACKING_EVENT_TYPES, TrackingEvent } from "../models/TrackingEvent";
@@ -423,7 +423,7 @@ function describeDevice(trip: TripDocument): string {
 
 // Traffic is checked at most every trafficCheckSeconds per trip
 function isTrafficCheckDue(state: TripState): boolean {
-  if (!mapbox.isConfigured()) return false;
+  if (!maps.isConfigured()) return false;
   const now = Date.now();
   if (state.lastTrafficCheckAt && now - state.lastTrafficCheckAt < cfg.trafficCheckSeconds * 1000) {
     return false;
@@ -432,9 +432,9 @@ function isTrafficCheckDue(state: TripState): boolean {
   return true;
 }
 
-// The Mapbox call happens outside the trip queue so it never holds up location pings
+// The Google Maps call happens outside the trip queue so it never holds up location pings
 function checkTraffic(tripId: string, from: Position, to: Position): void {
-  mapbox
+  maps
     .getRoute(from, to)
     .then((route) =>
       route ? enqueue(tripId, () => applyTraffic(tripId, route, from)) : undefined,
@@ -444,7 +444,7 @@ function checkTraffic(tripId: string, from: Position, to: Position): void {
 
 async function applyTraffic(
   tripId: string,
-  route: mapbox.PlannedRoute,
+  route: maps.PlannedRoute,
   coordinates: Position,
 ): Promise<void> {
   const trip = await Trip.findById(tripId).select("-route.geometry");

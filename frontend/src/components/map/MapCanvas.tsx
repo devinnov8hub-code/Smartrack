@@ -1,17 +1,15 @@
-import type { Feature, LineString } from 'geojson'
-import mapboxgl from 'mapbox-gl'
-import 'mapbox-gl/dist/mapbox-gl.css'
 import { useEffect, useRef, useState } from 'react'
 import van from '../../assets/icons/truck.svg'
+import { anchored, baseMapOptions, importLibrary, toLatLng, toPosition } from '../../services/googleMaps'
 import type { Position } from '../../types'
-
-mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 
 const ROUTE_COLOR = '#3b20d8'
 // The van glides to each new position instead of jumping
 const GLIDE_MS = 1000
 // How long after a position update the van keeps pulsing as "moving"
 const MOVING_MS = 20_000
+// Framing never zooms in closer than this
+const MAX_FRAME_ZOOM = 15
 
 export interface MapCanvasProps {
   origin: Position
@@ -28,13 +26,8 @@ export interface MapCanvasProps {
   className?: string
 }
 
-const line = (coordinates: Position[]): Feature<LineString> => ({
-  type: 'Feature',
-  properties: {},
-  geometry: { type: 'LineString', coordinates },
-})
-
-// A van in a round badge, with a ring that pulses while position updates keep arriving
+// A van in a round badge, with a ring that pulses while position updates keep arriving.
+// The badge centre (22px, 22px) sits on the rider's position, the "Off route" tag beside it.
 function vehicleElement() {
   const element = document.createElement('div')
   element.className = 'flex items-center gap-2'
@@ -44,17 +37,33 @@ function vehicleElement() {
     '<span data-badge class="relative flex size-11 items-center justify-center rounded-full border-2 bg-white shadow-md">' +
     `<img data-van src="${van}" alt="" class="w-7 transition-transform" />` +
     '</span></span>' +
-    '<span data-label class="rounded-full bg-white px-2.5 py-1 text-sm font-semibold text-danger shadow-md">Off route</span>'
-  return element
+    '<span data-label class="whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-sm font-semibold text-danger shadow-md">Off route</span>'
+  return anchored(element, 22, 22)
 }
 
 function originElement() {
   const element = document.createElement('div')
   element.className = 'size-3.5 rounded-full border-[3px] border-navy bg-white shadow'
-  return element
+  return anchored(element, 7, 7)
 }
 
-/** Live Mapbox map: planned route, driven path, pickup, destination and the rider. */
+// Pixel position of a coordinate within the map's visible area
+function screenPoint(map: google.maps.Map, position: Position) {
+  const projection = map.getProjection()
+  const bounds = map.getBounds()
+  const zoom = map.getZoom()
+  if (!projection || !bounds || zoom === undefined) return null
+  const topLeft = projection.fromLatLngToPoint({
+    lat: bounds.getNorthEast().lat(),
+    lng: bounds.getSouthWest().lng(),
+  })
+  const point = projection.fromLatLngToPoint(toLatLng(position))
+  if (!topLeft || !point) return null
+  const scale = 2 ** zoom
+  return { x: (point.x - topLeft.x) * scale, y: (point.y - topLeft.y) * scale }
+}
+
+/** Live Google map: planned route, driven path, pickup, destination and the rider. */
 export default function MapCanvas({
   origin,
   destination,
@@ -66,45 +75,32 @@ export default function MapCanvas({
   className = '',
 }: MapCanvasProps) {
   const container = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<mapboxgl.Map | null>(null)
-  const vehicleRef = useRef<mapboxgl.Marker | null>(null)
+  const mapRef = useRef<google.maps.Map | null>(null)
+  const routeLine = useRef<google.maps.Polyline | null>(null)
+  const pathLine = useRef<google.maps.Polyline | null>(null)
+  const vehicleRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null)
   const glideRef = useRef(0)
   const movingTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    const map = new mapboxgl.Map({
-      container: container.current!,
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: origin,
-      zoom: 11,
-    })
-    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right')
-    map.on('load', () => {
-      map.addSource('route', { type: 'geojson', data: line([]) })
-      map.addSource('path', { type: 'geojson', data: line([]) })
-      const round = { 'line-cap': 'round', 'line-join': 'round' } as const
-      map.addLayer({
-        id: 'route',
-        type: 'line',
-        source: 'route',
-        layout: round,
-        paint: { 'line-color': ROUTE_COLOR, 'line-width': 6, 'line-opacity': 0.35 },
-      })
-      map.addLayer({
-        id: 'path',
-        type: 'line',
-        source: 'path',
-        layout: round,
-        paint: { 'line-color': ROUTE_COLOR, 'line-width': 6 },
-      })
+    let cancelled = false
+    Promise.all([importLibrary('maps'), importLibrary('marker')]).then(([{ Map, Polyline }]) => {
+      if (cancelled) return
+      const map = new Map(container.current!, baseMapOptions(origin, 11))
+      const line = { strokeColor: ROUTE_COLOR, strokeWeight: 6, clickable: false, map }
+      routeLine.current = new Polyline({ ...line, strokeOpacity: 0.35 })
+      pathLine.current = new Polyline({ ...line, strokeOpacity: 1 })
+      mapRef.current = map
       setReady(true)
     })
-    mapRef.current = map
     return () => {
+      cancelled = true
       cancelAnimationFrame(glideRef.current)
       clearTimeout(movingTimer.current)
-      map.remove()
+      routeLine.current?.setMap(null)
+      pathLine.current?.setMap(null)
+      if (vehicleRef.current) vehicleRef.current.map = null
       mapRef.current = null
       vehicleRef.current = null
       setReady(false)
@@ -114,17 +110,17 @@ export default function MapCanvas({
   }, [])
 
   // Fits the pickup, destination, planned route and (optionally) the rider into view
-  function frame(map: mapboxgl.Map, withRider: boolean) {
-    const bounds = new mapboxgl.LngLatBounds(origin, origin).extend(destination)
-    route?.forEach((point) => bounds.extend(point))
-    if (withRider && position) bounds.extend(position)
+  function frame(map: google.maps.Map, withRider: boolean) {
+    const bounds = new google.maps.LatLngBounds(toLatLng(origin))
+    bounds.extend(toLatLng(destination))
+    route?.forEach((point) => bounds.extend(toLatLng(point)))
+    if (withRider && position) bounds.extend(toLatLng(position))
     // The full-screen map leaves room for the floating alert and the side panel;
     // the small embedded maps only need a little breathing space
     const edge = leftInset ? 60 : 32
-    map.fitBounds(bounds, {
-      padding: { top: leftInset ? 150 : edge, bottom: edge, right: edge, left: edge + leftInset },
-      maxZoom: 15,
-      duration: withRider ? 600 : 0,
+    map.fitBounds(bounds, { top: leftInset ? 150 : edge, bottom: edge, right: edge, left: edge + leftInset })
+    google.maps.event.addListenerOnce(map, 'idle', () => {
+      if ((map.getZoom() ?? 0) > MAX_FRAME_ZOOM) map.setZoom(MAX_FRAME_ZOOM)
     })
   }
 
@@ -135,23 +131,29 @@ export default function MapCanvas({
   useEffect(() => {
     const map = mapRef.current
     if (!ready || !map) return
+    const { AdvancedMarkerElement, PinElement } = google.maps.marker
     const markers = [
-      new mapboxgl.Marker({ element: originElement() }).setLngLat(origin).addTo(map),
-      new mapboxgl.Marker({ color: '#ff3700' }).setLngLat(destination).addTo(map),
+      new AdvancedMarkerElement({ map, position: toLatLng(origin), content: originElement() }),
+      new AdvancedMarkerElement({
+        map,
+        position: toLatLng(destination),
+        content: new PinElement({ background: '#ff3700', borderColor: '#c22d00', glyphColor: '#ffffff' }),
+      }),
     ]
     frame(map, false)
-    return () => markers.forEach((marker) => marker.remove())
+    return () =>
+      markers.forEach((marker) => {
+        marker.map = null
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, originKey, destinationKey, route, leftInset])
 
   useEffect(() => {
-    const source = ready ? mapRef.current?.getSource<mapboxgl.GeoJSONSource>('route') : undefined
-    source?.setData(line(route ?? []))
+    if (ready) routeLine.current?.setPath((route ?? []).map(toLatLng))
   }, [ready, route])
 
   useEffect(() => {
-    const source = ready ? mapRef.current?.getSource<mapboxgl.GeoJSONSource>('path') : undefined
-    source?.setData(line(path ?? []))
+    if (ready) pathLine.current?.setPath((path ?? []).map(toLatLng))
   }, [ready, path])
 
   const positionKey = position?.join()
@@ -161,18 +163,22 @@ export default function MapCanvas({
     const map = mapRef.current
     if (!ready || !map) return
     if (!position) {
-      vehicleRef.current?.remove()
+      if (vehicleRef.current) vehicleRef.current.map = null
       vehicleRef.current = null
       return
     }
     const placed = vehicleRef.current
     const marker =
       placed ??
-      // Anchored on the left so the "Off route" tag sits beside the van; the offset centres the badge
-      new mapboxgl.Marker({ element: vehicleElement(), anchor: 'left', offset: [-22, 0] }).setLngLat(position).addTo(map)
+      new google.maps.marker.AdvancedMarkerElement({
+        map,
+        position: toLatLng(position),
+        content: vehicleElement(),
+        zIndex: 10,
+      })
     vehicleRef.current = marker
 
-    const element = marker.getElement()
+    const element = marker.content as HTMLElement
     const part = (name: string) => element.querySelector<HTMLElement>(`[data-${name}]`)!
     part('badge').classList.toggle('border-danger', offRoute)
     part('badge').classList.toggle('border-navy', !offRoute)
@@ -181,10 +187,10 @@ export default function MapCanvas({
     part('label').classList.toggle('hidden', !offRoute)
 
     // A position that arrives after the van is already on the map means it is moving now
-    const from = marker.getLngLat()
-    if (placed && (from.lng !== position[0] || from.lat !== position[1])) {
+    const [fromLng, fromLat] = toPosition(marker.position as google.maps.LatLngLiteral)
+    if (placed && (fromLng !== position[0] || fromLat !== position[1])) {
       // The artwork faces left; it is mirrored when travelling east
-      part('van').classList.toggle('-scale-x-100', position[0] > from.lng)
+      part('van').classList.toggle('-scale-x-100', position[0] > fromLng)
       part('pulse').classList.remove('hidden')
       clearTimeout(movingTimer.current)
       movingTimer.current = setTimeout(() => part('pulse').classList.add('hidden'), MOVING_MS)
@@ -193,26 +199,29 @@ export default function MapCanvas({
       const startedAt = performance.now()
       const step = (now: number) => {
         const progress = Math.min(1, (now - startedAt) / GLIDE_MS)
-        marker.setLngLat([
-          from.lng + (position[0] - from.lng) * progress,
-          from.lat + (position[1] - from.lat) * progress,
-        ])
+        marker.position = {
+          lng: fromLng + (position[0] - fromLng) * progress,
+          lat: fromLat + (position[1] - fromLat) * progress,
+        }
         if (progress < 1) glideRef.current = requestAnimationFrame(step)
       }
       glideRef.current = requestAnimationFrame(step)
     }
 
     // A rider who wanders out of view (or behind the left panel) is brought back in
-    const { x, y } = map.project(position)
-    const { clientWidth, clientHeight } = map.getContainer()
+    const point = screenPoint(map, position)
+    const { clientWidth, clientHeight } = map.getDiv()
     const margin = 40
     const hidden =
-      x < leftInset + margin || x > clientWidth - margin || y < margin || y > clientHeight - margin
+      point &&
+      (point.x < leftInset + margin ||
+        point.x > clientWidth - margin ||
+        point.y < margin ||
+        point.y > clientHeight - margin)
     if (hidden) frame(map, true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, positionKey, offRoute])
 
-  // mapbox-gl.css sets its own position on the map element, so layout classes go on a wrapper
   return (
     <div className={className} role="img" aria-label="Delivery route map">
       <div ref={container} className="size-full" />

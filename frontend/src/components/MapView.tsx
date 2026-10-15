@@ -1,17 +1,18 @@
 import { lazy, Suspense } from 'react'
+import { MAPS_KEY } from '../services/googleMaps'
 import type { Position } from '../types'
 import type { MapCanvasProps } from './map/MapCanvas'
 
-// Mapbox GL is large, so it is only downloaded by the screens that show a map.
+// The map code is only downloaded by the screens that show a map.
 const MapCanvas = lazy(() => import('./map/MapCanvas'))
 const PinMap = lazy(() => import('./map/PinMap'))
 
-const hasToken = Boolean(import.meta.env.VITE_MAPBOX_TOKEN)
+const hasToken = Boolean(MAPS_KEY)
 
 function Placeholder({ className }: { className: string }) {
   return (
     <div className={`flex items-center justify-center bg-field p-4 text-center text-sm text-muted ${className}`}>
-      {!hasToken && 'Map unavailable: set VITE_MAPBOX_TOKEN in .env'}
+      {!hasToken && 'Map unavailable: set VITE_GOOGLE_MAPS_API_KEY in .env'}
     </div>
   )
 }

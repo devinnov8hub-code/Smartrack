@@ -2,7 +2,7 @@
 
 Tracks delivery vehicles in real time and alerts the manager when a driver leaves the planned route, stops moving, hits heavy traffic, goes silent, or arrives.
 
-TypeScript, Express 5, MongoDB (Mongoose), Socket.IO, Redis, Mapbox Directions, Firebase Cloud Messaging.
+TypeScript, Express 5, MongoDB (Mongoose), Socket.IO, Redis, Google Maps Platform (Routes, Geocoding), Firebase Cloud Messaging.
 
 ## Running it
 
@@ -43,7 +43,7 @@ The server starts with an empty `.env`. Each missing service has a development f
 | --- | --- |
 | `MONGO_URI` | In-memory MongoDB. Data is lost on restart. |
 | `REDIS_URL` | Live trip state is kept in process memory. |
-| `MAPBOX_ACCESS_TOKEN` | Planned route is a straight line from origin to destination, and there are no traffic alerts or live ETA. |
+| `GOOGLE_MAPS_API_KEY` | Planned route is a straight line from origin to destination, and there are no traffic alerts or live ETA. |
 | `FIREBASE_SERVICE_ACCOUNT` | No push notifications. Alerts still arrive over the socket and are stored. |
 | `JWT_SECRET` | Random secret per start, so tokens die on restart. |
 
@@ -52,7 +52,7 @@ The server starts with an empty `.env`. Each missing service has a development f
 ## How it works
 
 1. A manager signs up, then creates drivers and vehicles.
-2. The manager creates a trip (driver, vehicle, origin, destination). The backend plans the route with Mapbox and stores it.
+2. The manager creates a trip (driver, vehicle, origin, destination). The backend plans the route with Google Maps and stores it.
 3. The driver logs in, starts the trip, and the driver app streams GPS over the socket.
 4. Every ping is stored, checked, and pushed to the manager as `trip:location`. Alerts go out as `alert:new`, are stored, and are sent as push notifications.
 
@@ -60,7 +60,7 @@ The server starts with an empty `.env`. Each missing service has a development f
 | --- | --- | --- |
 | `deviation` | critical | More than 200 m from the planned route for 2 pings in a row |
 | `stationary` | warning | Within a 30 m radius for 5 minutes |
-| `traffic` | warning | Mapbox says the remaining drive is at least 5 minutes and 25% slower than usual (checked every 2 minutes, at most one alert per 15 minutes) |
+| `traffic` | warning | Google Maps says the remaining drive is at least 5 minutes and 25% slower than it would be without traffic (checked every 2 minutes, at most one alert per 15 minutes) |
 | `signal_lost` | critical | No ping for 3 minutes during a trip. The message includes the phone's last battery reading and last tracking report, e.g. "Last report: the app was sent to the background. Last battery reading: 7%." |
 | `arrival` | info | Within 100 m of the destination. The trip becomes `arrived`. |
 
@@ -82,7 +82,7 @@ These are the server side of the checks the driver app already makes. The server
 
 - Base URL is `/api`. Send `Authorization: Bearer <token>` on everything except register and login.
 - Success responses are `{ "data": ..., "meta": ... }`. Errors are `{ "message": "..." }` with a 4xx or 5xx status, plus a stable `code` where the frontend needs to branch (`low-battery`, `trip-in-progress`, `vehicle-in-use`, `destination-not-reached`).
-- **Coordinates:** requests and socket events use `lat` and `lng` (`latitude` and `longitude` are also accepted, as is `recordedAt` for `timestamp`). Stored documents (trips, alerts) use GeoJSON, which is `[lng, lat]`. Mapbox GL takes that order directly.
+- **Coordinates:** requests and socket events use `lat` and `lng` (`latitude` and `longitude` are also accepted, as is `recordedAt` for `timestamp`). Stored documents (trips, alerts) use GeoJSON, which is `[lng, lat]`. Google Maps wants `{ lat, lng }`, so the frontend converts.
 - List endpoints accept `page` and `limit` (max 100).
 - Speed is in meters per second, heading in degrees, accuracy and distances in meters.
 
@@ -143,7 +143,7 @@ POST /api/trips
 }
 ```
 
-`driverId` and `vehicleId` are optional: an order can be created first and assigned with `/trips/:id/assign`. `vehicleId` defaults to the driver's own vehicle, and `reference` is generated when not given. `origin` and `destination` can also be just `{ "address": "..." }`, which is looked up with Mapbox in `GEOCODE_COUNTRY` (default `ng`); the code is `address-not-found` when nothing matches. Mapbox knows streets and districts in Nigeria but few landmarks, so prefer sending coordinates. `package` takes `{ name?, deliveryType?: "Parcel" | "Cargo", category?, description? }`, and `range` (`Intra-State` or `Inter-State`) is set when both places resolve to a state.
+`driverId` and `vehicleId` are optional: an order can be created first and assigned with `/trips/:id/assign`. `vehicleId` defaults to the driver's own vehicle, and `reference` is generated when not given. `origin` and `destination` can also be just `{ "address": "..." }`, which is looked up with Google Maps in `GEOCODE_COUNTRY` (default `ng`); the code is `address-not-found` when nothing matches. Coordinates are still preferred when the client has them. `package` takes `{ name?, deliveryType?: "Parcel" | "Cargo", category?, description? }`, and `range` (`Intra-State` or `Inter-State`) is set when both places resolve to a state.
 
 `GET /stats` (manager) returns `{ totalRiders, routeDeviations, activeDeliveries, totalDeliveries }` for the overview cards.
 
@@ -199,7 +199,7 @@ socket.emit("tracking:event", { tripId, type: "backgrounded", battery, timestamp
 ```
 src/server.ts            entry point: database, HTTP, sockets, signal monitor
 src/app.ts               express app
-src/config/              env, database, redis store, mapbox, firebase
+src/config/              env, database, redis store, Google Maps, firebase
 src/models/              User, Vehicle, Trip, LocationPing, Alert
 src/controllers/ routes/ REST API
 src/services/tracking    detection for every location ping

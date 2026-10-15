@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import * as mapbox from "../config/mapbox";
+import * as maps from "../config/maps";
 import { env } from "../config/env";
 import { LocationPing } from "../models/LocationPing";
 import { TrackingEvent } from "../models/TrackingEvent";
@@ -59,7 +59,7 @@ const text = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim() ? value.trim() : undefined;
 
 // Accepts { lat, lng }, or just an address (a string or { address }) that is
-// looked up with Mapbox. The name keeps what the user typed.
+// looked up with Google Maps. The name keeps what the user typed.
 async function resolvePlace(input: unknown, label: string): Promise<Place> {
   const source = (typeof input === "string" ? { address: input } : input) as Record<
     string,
@@ -73,13 +73,13 @@ async function resolvePlace(input: unknown, label: string): Promise<Place> {
 
   if (!hasCoordinates) {
     if (!address) throw new ApiError(400, `${label} needs an address, or a lat and lng`);
-    if (!mapbox.isConfigured()) {
+    if (!maps.isConfigured()) {
       throw new ApiError(
         400,
-        `${label} needs a lat and lng: address lookup is off because MAPBOX_ACCESS_TOKEN is not set`,
+        `${label} needs a lat and lng: address lookup is off because GOOGLE_MAPS_API_KEY is not set`,
       );
     }
-    const found = await mapbox.geocode(address);
+    const found = await maps.geocode(address);
     if (!found) {
       throw new ApiError(
         422,
@@ -100,8 +100,8 @@ async function resolvePlace(input: unknown, label: string): Promise<Place> {
   // That is a nicety, so a failed lookup does not fail the request.
   const region = text(source.region);
   const found =
-    mapbox.isConfigured() && (!address || !region)
-      ? await mapbox.reverseGeocode(coordinates).catch(() => null)
+    maps.isConfigured() && (!address || !region)
+      ? await maps.reverseGeocode(coordinates).catch(() => null)
       : null;
   return {
     name: name || found?.name || undefined,
@@ -167,19 +167,19 @@ async function resolveAssignment(
 }
 
 export async function planRoute(from: Position, to: Position): Promise<TripRoute> {
-  if (!mapbox.isConfigured()) {
+  if (!maps.isConfigured()) {
     return {
       source: "straight_line",
       geometry: { type: "LineString", coordinates: [from, to] },
       distanceMeters: Math.round(haversineDistance(from, to)),
     };
   }
-  const route = await mapbox.getRoute(from, to);
+  const route = await maps.getRoute(from, to);
   if (!route) {
     throw new ApiError(422, "No drivable route found between origin and destination");
   }
   return {
-    source: "mapbox",
+    source: "google",
     geometry: route.geometry,
     distanceMeters: route.distanceMeters,
     durationSeconds: route.typicalDurationSeconds || route.durationSeconds,
